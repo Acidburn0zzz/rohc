@@ -252,7 +252,8 @@ struct rohc_comp_rfc3095_ctxt
 
 	/// @brief The handler used to decide the state that should be used for the
 	///        next packet
-	void (*decide_state)(struct rohc_comp_ctxt *const context);
+	rohc_comp_state_t (*decide_state)(const struct rohc_comp_ctxt *const context)
+		__attribute__((warn_unused_result, nonnull(1)));
 	/** @brief The handler used to decide which packet to send in FO state */
 	rohc_packet_t (*decide_FO_packet)(const struct rohc_comp_ctxt *const context)
 		__attribute__((warn_unused_result, nonnull(1)));
@@ -362,8 +363,8 @@ bool rohc_comp_rfc3095_feedback(struct rohc_comp_ctxt *const context,
                                 const size_t feedback_data_len)
 	__attribute__((warn_unused_result, nonnull(1, 3, 5)));
 
-void rohc_comp_rfc3095_decide_state(struct rohc_comp_ctxt *const context)
-	__attribute__((nonnull(1)));
+rohc_comp_state_t rohc_comp_rfc3095_decide_state(const struct rohc_comp_ctxt *const context)
+	__attribute__((warn_unused_result, nonnull(1)));
 
 void rohc_get_ipid_bits(const struct rohc_comp_ctxt *const context,
                         bool *const innermost_ip_id_changed,

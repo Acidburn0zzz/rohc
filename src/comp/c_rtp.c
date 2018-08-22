@@ -63,7 +63,8 @@ static int c_rtp_encode(struct rohc_comp_ctxt *const context,
                         rohc_packet_t *const packet_type)
 	__attribute__((warn_unused_result, nonnull(1, 2, 4, 6)));
 
-static void rtp_decide_state(struct rohc_comp_ctxt *const context);
+static rohc_comp_state_t rtp_decide_state(const struct rohc_comp_ctxt *const context)
+	__attribute__((warn_unused_result, nonnull(1)));
 
 static rohc_packet_t c_rtp_decide_FO_packet(const struct rohc_comp_ctxt *const context);
 static rohc_packet_t c_rtp_decide_SO_packet(const struct rohc_comp_ctxt *const context);
@@ -710,44 +711,40 @@ quit:
  *  - First Order (FO),
  *  - Second Order (SO).
  *
- * @param context The compression context
+ * @param context  The compression context
+ * @return         The new state for the context
  */
-static void rtp_decide_state(struct rohc_comp_ctxt *const context)
+static rohc_comp_state_t rtp_decide_state(const struct rohc_comp_ctxt *const context)
 {
-	struct rohc_comp_rfc3095_ctxt *rfc3095_ctxt;
-	struct sc_rtp_context *rtp_context;
-
-	rfc3095_ctxt = (struct rohc_comp_rfc3095_ctxt *) context->specific;
-	rtp_context = (struct sc_rtp_context *) rfc3095_ctxt->specific;
+	const struct rohc_comp_rfc3095_ctxt *const rfc3095_ctxt =
+		(struct rohc_comp_rfc3095_ctxt *) context->specific;
+	const struct sc_rtp_context *const rtp_context =
+		(struct sc_rtp_context *) rfc3095_ctxt->specific;
+	const rohc_comp_state_t curr_state = context->state;
+	rohc_comp_state_t next_state;
 
 	if(rtp_context->tmp.send_rtp_dynamic)
 	{
-		if(context->state == ROHC_COMP_STATE_IR)
+		if(curr_state == ROHC_COMP_STATE_IR)
 		{
 			rohc_comp_debug(context, "%d RTP dynamic fields changed, stay in "
 			                "IR state", rtp_context->tmp.send_rtp_dynamic);
+			next_state = ROHC_COMP_STATE_IR;
 		}
 		else
 		{
 			rohc_comp_debug(context, "%d RTP dynamic fields changed, go in FO "
 			                "state", rtp_context->tmp.send_rtp_dynamic);
-			rohc_comp_change_state(context, ROHC_COMP_STATE_FO);
+			next_state = ROHC_COMP_STATE_FO;
 		}
 	}
 	else
 	{
 		/* generic function used by the IP-only, UDP and UDP-Lite profiles */
-		rohc_comp_rfc3095_decide_state(context);
+		next_state = rohc_comp_rfc3095_decide_state(context);
 	}
 
-	/* force initializing TS, TS_STRIDE and TS_SCALED again after
-	 * transition back to IR */
-	if(context->state == ROHC_COMP_STATE_IR &&
-	   rtp_context->ts_sc.state > INIT_STRIDE)
-	{
-		rtp_context->ts_sc.state = INIT_STRIDE;
-		rtp_context->ts_sc.nr_init_stride_packets = 0;
-	}
+	return next_state;
 }
 
 
@@ -789,6 +786,15 @@ static bool rtp_encode_uncomp_fields(struct rohc_comp_ctxt *const context,
 	c_add_ts(&rtp_context->ts_sc, rohc_ntoh32(uncomp_pkt_hdrs->rtp->timestamp),
 	         rfc3095_ctxt->sn);
 
+	/* force initializing TS, TS_STRIDE and TS_SCALED again after
+	 * transition back to IR */
+	if(context->state == ROHC_COMP_STATE_IR &&
+	   context->state_oa_repeat_nr == 0 &&
+	   rtp_context->ts_sc.state > INIT_STRIDE)
+	{
+		rtp_context->ts_sc.state = INIT_STRIDE;
+		rtp_context->ts_sc.nr_init_stride_packets = 0;
+	}
 	/* determine the number of TS bits to send wrt compression state */
 	if(rtp_context->ts_sc.state == INIT_TS ||
 	   rtp_context->ts_sc.state == INIT_STRIDE)

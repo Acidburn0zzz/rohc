@@ -310,9 +310,8 @@ static void rohc_comp_rfc5225_ip_udp_rtp_feedback_ack(struct rohc_comp_ctxt *con
 	__attribute__((nonnull(1)));
 
 /* mode and state transitions */
-static void rohc_comp_rfc5225_ip_udp_rtp_decide_state(struct rohc_comp_ctxt *const context,
-                                                  const struct rohc_ts pkt_time)
-	__attribute__((nonnull(1)));
+static rohc_comp_state_t rohc_comp_rfc5225_ip_udp_rtp_decide_state(struct rohc_comp_ctxt *const context)
+	__attribute__((warn_unused_result, nonnull(1)));
 
 /* decide packet */
 static rohc_packet_t rohc_comp_rfc5225_ip_udp_rtp_decide_pkt(const struct rohc_comp_ctxt *const context)
@@ -526,7 +525,18 @@ static int rohc_comp_rfc5225_ip_udp_rtp_encode(struct rohc_comp_ctxt *const cont
 	rohc_comp_rfc5225_ip_udp_rtp_detect_changes(context, uncomp_pkt_hdrs);
 
 	/* STEP 1: decide state */
-	rohc_comp_rfc5225_ip_udp_rtp_decide_state(context, uncomp_pkt_time);
+	{
+		const rohc_comp_state_t next_state = rohc_comp_rfc5225_ip_udp_rtp_decide_state(context);
+
+		/* change state */
+		rohc_comp_change_state(context, next_state);
+
+		/* periodic refreshes in U-mode only */
+		if(context->mode == ROHC_U_MODE)
+		{
+			rohc_comp_periodic_down_transition(context, uncomp_pkt_time);
+		}
+	}
 
 	/* STEP 2: decide packet type */
 	*packet_type = rohc_comp_rfc5225_ip_udp_rtp_decide_pkt(context);
@@ -1392,10 +1402,9 @@ static void rohc_comp_rfc5225_ip_udp_rtp_feedback_ack(struct rohc_comp_ctxt *con
  * @brief Decide the state that should be used for the next packet
  *
  * @param context  The compression context
- * @param pkt_time The time of packet arrival
+ * @return         The new state for the context
  */
-static void rohc_comp_rfc5225_ip_udp_rtp_decide_state(struct rohc_comp_ctxt *const context,
-                                                  const struct rohc_ts pkt_time)
+static rohc_comp_state_t rohc_comp_rfc5225_ip_udp_rtp_decide_state(struct rohc_comp_ctxt *const context)
 {
 	const uint8_t oa_repetitions_nr = context->compressor->oa_repetitions_nr;
 	const rohc_comp_state_t curr_state = context->state;
@@ -1426,13 +1435,7 @@ static void rohc_comp_rfc5225_ip_udp_rtp_decide_state(struct rohc_comp_ctxt *con
 		next_state = ROHC_COMP_STATE_SO;
 	}
 
-	rohc_comp_change_state(context, next_state);
-
-	/* periodic refreshes in U-mode only */
-	if(context->mode == ROHC_U_MODE)
-	{
-		rohc_comp_periodic_down_transition(context, pkt_time);
-	}
+	return next_state;
 }
 
 

@@ -86,7 +86,8 @@ static bool c_udp_create(struct rohc_comp_ctxt *const context,
                          const struct rohc_pkt_hdrs *const uncomp_pkt_hdrs)
 	__attribute__((warn_unused_result, nonnull(1, 2)));
 
-static void udp_decide_state(struct rohc_comp_ctxt *const context);
+static rohc_comp_state_t udp_decide_state(const struct rohc_comp_ctxt *const context)
+	__attribute__((warn_unused_result, nonnull(1)));
 
 static int c_udp_encode(struct rohc_comp_ctxt *const context,
                         const struct rohc_pkt_hdrs *const uncomp_pkt_hdrs,
@@ -242,27 +243,30 @@ quit:
  *  - First Order (FO),
  *  - Second Order (SO).
  *
- * @param context The compression context
+ * @param context  The compression context
+ * @return         The new state for the context
  */
-static void udp_decide_state(struct rohc_comp_ctxt *const context)
+static rohc_comp_state_t udp_decide_state(const struct rohc_comp_ctxt *const context)
 {
-	struct rohc_comp_rfc3095_ctxt *rfc3095_ctxt;
-	struct sc_udp_context *udp_context;
-
-	rfc3095_ctxt = (struct rohc_comp_rfc3095_ctxt *) context->specific;
-	udp_context = (struct sc_udp_context *) rfc3095_ctxt->specific;
+	const struct rohc_comp_rfc3095_ctxt *const rfc3095_ctxt =
+		(struct rohc_comp_rfc3095_ctxt *) context->specific;
+	const struct sc_udp_context *const udp_context =
+		(struct sc_udp_context *) rfc3095_ctxt->specific;
+	rohc_comp_state_t next_state;
 
 	if(udp_context->tmp.send_udp_dynamic)
 	{
 		rohc_comp_debug(context, "go back to IR state because UDP checksum "
 		                "behaviour changed in the last few packets");
-		rohc_comp_change_state(context, ROHC_COMP_STATE_IR);
+		next_state = ROHC_COMP_STATE_IR;
 	}
 	else
 	{
 		/* generic function used by the IP-only, UDP and UDP-Lite profiles */
-		rohc_comp_rfc3095_decide_state(context);
+		next_state = rohc_comp_rfc3095_decide_state(context);
 	}
+
+	return next_state;
 }
 
 

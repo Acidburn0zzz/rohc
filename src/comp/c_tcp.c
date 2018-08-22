@@ -111,9 +111,8 @@ static void tcp_detect_changes_tcp_hdr(struct rohc_comp_ctxt *const context,
 	__attribute__((nonnull(1, 2, 3)));
 
 
-static void tcp_decide_state(struct rohc_comp_ctxt *const context,
-                             struct rohc_ts pkt_time)
-	__attribute__((nonnull(1)));
+static rohc_comp_state_t tcp_decide_state(const struct rohc_comp_ctxt *const context)
+	__attribute__((warn_unused_result, nonnull(1)));
 
 static rohc_packet_t tcp_decide_packet(const struct rohc_comp_ctxt *const context,
                                        const struct rohc_pkt_hdrs *const uncomp_pkt_hdrs,
@@ -909,7 +908,18 @@ static int c_tcp_encode(struct rohc_comp_ctxt *const context,
 	}
 
 	/* decide in which state to go */
-	tcp_decide_state(context, uncomp_pkt_time);
+	{
+		const rohc_comp_state_t next_state = tcp_decide_state(context);
+
+		/* change state */
+		rohc_comp_change_state(context, next_state);
+
+		/* periodic context refreshes (RFC6846, §5.2.1.2) */
+		if(context->mode == ROHC_U_MODE)
+		{
+			rohc_comp_periodic_down_transition(context, uncomp_pkt_time);
+		}
+	}
 
 	/* decide which packet to send */
 	*packet_type = tcp_decide_packet(context, uncomp_pkt_hdrs, &tmp);
@@ -3407,11 +3417,10 @@ static uint16_t c_tcp_get_next_msn(const struct rohc_comp_ctxt *const context)
  *  - First Order (FO),\n
  *  - Second Order (SO).
  *
- * @param context   The compression context
- * @param pkt_time  The time of packet arrival
+ * @param context  The compression context
+ * @return         The new state for the context
  */
-static void tcp_decide_state(struct rohc_comp_ctxt *const context,
-                             struct rohc_ts pkt_time)
+static rohc_comp_state_t tcp_decide_state(const struct rohc_comp_ctxt *const context)
 {
 	const uint8_t oa_repetitions_nr = context->compressor->oa_repetitions_nr;
 	const rohc_comp_state_t curr_state = context->state;
@@ -3441,13 +3450,7 @@ static void tcp_decide_state(struct rohc_comp_ctxt *const context,
 		next_state = ROHC_COMP_STATE_SO;
 	}
 
-	rohc_comp_change_state(context, next_state);
-
-	/* periodic context refreshes (RFC6846, §5.2.1.2) */
-	if(context->mode == ROHC_U_MODE)
-	{
-		rohc_comp_periodic_down_transition(context, pkt_time);
-	}
+	return next_state;
 }
 
 

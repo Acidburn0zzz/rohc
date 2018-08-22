@@ -708,10 +708,17 @@ int rohc_comp_rfc3095_encode(struct rohc_comp_ctxt *const context,
 	rohc_comp_rfc3095_detect_changes(context, uncomp_pkt_hdrs);
 
 	/* decide in which state to go */
-	rfc3095_ctxt->decide_state(context);
-	if(context->mode == ROHC_U_MODE)
 	{
-		rohc_comp_periodic_down_transition(context, uncomp_pkt_time);
+		const rohc_comp_state_t next_state = rfc3095_ctxt->decide_state(context);
+
+		/* change state */
+		rohc_comp_change_state(context, next_state);
+
+		/* periodic context refreshes in U-mode only */
+		if(context->mode == ROHC_U_MODE)
+		{
+			rohc_comp_periodic_down_transition(context, uncomp_pkt_time);
+		}
 	}
 
 	/* compute how many bits are needed to send header fields */
@@ -1218,9 +1225,10 @@ static void rohc_comp_rfc3095_detect_changes(struct rohc_comp_ctxt *const contex
  *  - First Order (FO),\n
  *  - Second Order (SO).
  *
- * @param context The compression context
+ * @param context  The compression context
+ * @return         The new state for the context
  */
-void rohc_comp_rfc3095_decide_state(struct rohc_comp_ctxt *const context)
+rohc_comp_state_t rohc_comp_rfc3095_decide_state(const struct rohc_comp_ctxt *const context)
 {
 	const uint8_t oa_repetitions_nr = context->compressor->oa_repetitions_nr;
 	const rohc_comp_state_t curr_state = context->state;
@@ -1251,7 +1259,7 @@ void rohc_comp_rfc3095_decide_state(struct rohc_comp_ctxt *const context)
 		next_state = ROHC_COMP_STATE_SO;
 	}
 
-	rohc_comp_change_state(context, next_state);
+	return next_state;
 }
 
 
